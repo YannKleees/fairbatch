@@ -2,27 +2,33 @@
 
 This fork evaluates FairBatch (Roh et al., ICLR 2021) as a bias mitigation method on three public datasets. FairBatch is an in processing method: it changes how many examples of each (label, group) cell enter every minibatch, so that the trained model satisfies demographic parity. For each dataset, the code computes DP_Diff, the disparate impact ratio (DIR) and consistency on the original labels, trains a logistic regression with and without FairBatch on a stratified split, and reports the same measures plus accuracy and balanced accuracy on the held out test set.
 
-The authors' files (`FairBatchSampler.py`, `models.py`, `FairBatch_Synthetic.ipynb`, `synthetic_data/`) are unchanged. Their original README is kept at the bottom of this file.
+The repository has two separate parts:
+
+- `paper_code/` is the authors' code, exactly as published in [yuji-roh/fairbatch](https://github.com/yuji-roh/fairbatch), with their README.
+- Everything else is ours: the `fairness_eval/` package, the notebook, the results and this README. Our code imports the authors' sampler and model from `paper_code/` and never edits them.
 
 ## Where to look
 
 ```text
-├── evaluation.ipynb          runs every experiment and shows all tables and figures, with saved outputs
-├── fairness_eval/            the code behind the notebook
-│   ├── config.py             datasets, sensitive attributes, seeds and training settings
+├── evaluation.ipynb          our evaluation: runs every experiment and shows all tables and figures, with saved outputs
+├── fairness_eval/            our code behind the notebook
+│   ├── config.py             datasets, sensitive attributes, seeds, training settings, alpha candidates
 │   ├── data.py               downloads and preprocesses Adult, German and COMPAS
-│   ├── metrics.py            DP_Diff, DIR, consistency, accuracy and balanced accuracy
-│   ├── sampler.py            the authors' FairBatch sampler with three fixes, see below
-│   └── experiments.py        split, training loop and the experiments
-├── results/                  the cached results, one CSV per experiment
+│   ├── metrics.py            DP_Diff, DIR, consistency, the paper's DP disparity, accuracy, balanced accuracy
+│   ├── sampler.py            the authors' sampler with three fixes, and our rate based variant
+│   └── experiments.py        splits, training loop, alpha selection and the experiments
+├── results/                  cached results, one CSV per experiment
 │   ├── original.csv          fairness of the original labels, full datasets
-│   ├── main.csv              test set results, baseline and FairBatch, 10 seeds
-│   ├── lambdas.csv           FairBatch's two lambdas after every epoch, seed 0
-│   └── alpha.csv             FairBatch with six step sizes, 5 seeds
-├── docs/FairBatch.pdf        the original paper (Roh et al., ICLR 2021)
-├── FairBatchSampler.py       the authors' sampler (unchanged)
-├── models.py                 the authors' logistic regression (unchanged)
-└── FairBatch_Synthetic.ipynb the authors' demo on synthetic data (unchanged)
+│   ├── alpha_validation.csv  both FairBatch variants for six alphas on validation data, 5 seeds
+│   ├── main.csv              test set results of all methods, 10 seeds
+│   └── trace.csv             lambdas and training DP gap after every epoch, seed 0
+├── docs/FairBatch.pdf        the paper
+└── paper_code/               the authors' code, unchanged
+    ├── README.md             the authors' README
+    ├── FairBatchSampler.py   the FairBatch sampler
+    ├── models.py             logistic regression and their test function
+    ├── FairBatch_Synthetic.ipynb  their demo on synthetic data (run it from inside paper_code/)
+    └── synthetic_data/       the data of their demo
 ```
 
 ## Running
@@ -37,9 +43,15 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Then open `evaluation.ipynb` with this environment from the repository root and run all cells. The results are cached in `results/`, so this takes under a minute. To rerun an experiment, delete its CSV; to rerun everything, delete the `results/` folder. A full rerun takes about ten minutes on one CPU core. Without the notebook, `python -m fairness_eval.experiments` runs all experiments and writes the CSVs.
+Then open `evaluation.ipynb` with this environment from the repository root and run all cells. The results are cached in `results/`, so this takes under a minute. To rerun an experiment, delete its CSV; to rerun everything, delete the `results/` folder. `main.csv` and `trace.csv` depend on the alphas chosen from `alpha_validation.csv`, so delete them too when you rerun the alpha selection. A full rerun takes about 25 minutes on a two core CPU; runs are parallelized over all cores. Without the notebook, `python -m fairness_eval.experiments` runs all experiments and writes the CSVs.
 
 Tested with Python 3.13, PyTorch 2.15 (CPU), numpy 2.5, pandas 3.0, scikit-learn 1.9.
+
+## Methods
+
+- `baseline`: logistic regression trained with uniform minibatches.
+- `fairbatch`: the same model trained with the authors' FairBatch sampler, `target_fairness="dp"` (Algorithm 4 of the paper), with the fixes listed below.
+- `fairbatch_rate`: our variant, not from the paper. It keeps FairBatch's batch composition but drives both lambdas by the sign of the actual demographic parity gap of the model's predictions on the training data, instead of the paper's comparison of surrogate losses within (label, group) cells. It tests why the authors' update overshoots on COMPAS (notebook section 7).
 
 ## Settings
 
@@ -49,9 +61,12 @@ Tested with Python 3.13, PyTorch 2.15 (CPU), numpy 2.5, pandas 3.0, scikit-learn
 | Rows after cleaning | 45,222 | 1,000 | 5,278 |
 | Sensitive attribute, z = 1 privileged | sex, male | age, older than 25 | race, Caucasian (African-American = 0) |
 | Favorable label y = 1 | income above 50K | good credit | no recidivism within two years |
-| Batch size, epochs | 500, 100 | 50, 300 | 100, 200 |
+| Batch size, epochs | 1,000, 600 (paper) | 50, 300 (not in the paper) | 200, 300 (paper) |
+| alpha, fairbatch / fairbatch_rate | 0.02 / 0.02 | 0.0025 / 0.0005 | 0.0005 / 0.01 |
 
-All datasets: logistic regression from the authors' `models.py`, Adam with learning rate 0.005, FairBatch step size `alpha` = 0.005 (the authors' value), `target_fairness="dp"`, 70/30 train/test split stratified on label and group together, features standardized on the training set, seeds 0 to 9. The baseline is the same model trained with uniform minibatches of the same size.
+All datasets: logistic regression from the authors' `models.py`, Adam with learning rate 0.005 (the paper does not give one), 70/30 train/test split stratified on label and group together, features standardized on the training data, seeds 0 to 9. The baseline uses the same batch size and epochs.
+
+Choice of alpha: as in the paper, alpha is selected on the training data only, from candidates in the paper's range [0.0001, 0.05]: 0.0005, 0.001, 0.0025, 0.005, 0.01 and 0.02. For seeds 0 to 4, 20% of the training part is held out as a validation set, stratified on label and group. Per dataset and variant, we take the alpha with the highest mean validation balanced accuracy among those whose mean validation |DP_Diff| is at most 0.05, or the smallest mean |DP_Diff| if no alpha reaches it. The test set is used only for the final results.
 
 Preprocessing:
 
@@ -66,8 +81,7 @@ Metrics:
 - DIR = P(y=1 | z=0) / P(y=1 | z=1). One is parity; below 0.8 fails the four fifths rule.
 - Consistency (Zemel et al., 2013) = 1 − mean |y_i − mean label of the 5 nearest neighbours of i|, with neighbours found on standardized features, excluding the point itself.
 - "Before" is computed on the original labels of the full dataset; "after" on the predictions for the test set.
-
-The authors' `test_model` reports DP as max |P(ŷ=1 | z) − P(ŷ=1)|, the largest deviation of a group from the overall rate. That is smaller than the DP_Diff above, so it is not used.
+- `dp_paper` is the paper's DP disparity, max over groups of |P(ŷ=1 | z) − P(ŷ=1)|. It equals |DP_Diff| times the share of the larger group, so it is smaller than DP_Diff. We report it only to compare with the paper's Table 2 (Adult with sex, the one setting we share with the paper).
 
 ## Changes to the authors' sampler
 
@@ -78,64 +92,3 @@ The authors' `test_model` reports DP as max |P(ŷ=1 | z) − P(ŷ=1)|, the large
 3. Batch indices. When a group runs out of examples within an epoch, `select_batch_replacement` sets the next start index to `len - start` instead of `batch_size - (len - start)`, so later batches overlap earlier ones. Each group is now shuffled once per epoch and read cyclically.
 
 The training loop iterates over the sampler directly instead of wrapping it in a `DataLoader` with batch size 1, and uses `binary_cross_entropy_with_logits(2f, y)`, which equals the authors' loss, BCE on (tanh(f) + 1) / 2, but is numerically stable.
-
----
-
-# Original README of the authors
-
-## FairBatch: Batch Selection for Model Fairness
-
-#### Authors: Yuji Roh, Kangwook Lee, Steven Euijong Whang, and Changho Suh
-#### In Proceedings of the 9th International Conference on Learning Representations (ICLR), 2021
-----------------------------------------------------------------------
-
-This repo contains codes used in the ICLR 2021 paper: [FairBatch: Batch Selection for Model Fairness](https://arxiv.org/abs/2012.01696)
-
-*Abstract: Training a fair machine learning model is essential to prevent demographic disparity. Existing techniques for improving model fairness require broad changes in either data preprocessing or model training, rendering themselves difficult-to-adopt for potentially already complex machine learning systems. We address this problem via the lens of bilevel optimization. While keeping the standard training algorithm as an inner optimizer, we incorporate an outer optimizer so as to equip the inner problem with an additional functionality: Adaptively selecting minibatch sizes for the purpose of improving model fairness. Our batch selection algorithm, which we call FairBatch, implements this optimization and supports prominent fairness measures: equal opportunity, equalized odds, and demographic parity. FairBatch comes with a significant implementation benefit -- it does not require any modification to data preprocessing or model training. For instance, a single-line change of PyTorch code for replacing batch selection part of model training suffices to employ FairBatch. Our experiments conducted both on synthetic and benchmark real data demonstrate that FairBatch can provide such functionalities while achieving comparable (or even greater) performances against the state of the arts. Furthermore, FairBatch can readily improve fairness of any pre-trained model simply via fine-tuning. It is also compatible with existing batch selection techniques intended for different purposes, such as faster convergence, thus gracefully achieving multiple purposes.*
-
-
-### Setting
-This directory is for simulating FairBatch on the synthetic dataset.
-The program needs PyTorch and Jupyter Notebook.
-
-The directory contains a total of 4 files and 1 child directory: 
-1 README, 2 python files, 1 jupyter notebook, 
-and the child directory containing 6 numpy files for synthetic data.
-
-### Simulation
-To simulate FairBatch, please use the **jupyter notebook** in the directory.
-
-The jupyter notebook will load the data and train the models with three 
-different fairness metrics: equal opportunity, equalized odds, and demographic parity.
-
-Each training utilizes the FairBatch sampler, which is defined in FairBatchSampler.py.
-The pytorch dataloader serves the batches to the model via the FairBatch sampler. 
-Experiments are repeated 10 times each.
-After the training, the test accuracy and fairness will be shown.
-
-### Other details
-The two python files are models.py and FairBatchSampler.py.
-The models.py file contains a logistic regression architecture and a test function.
-The FairBatchSampler.py file contains two classes: CustomDataset and FairBatch. 
-The CustomDataset class defines the dataset, and the FairBatch class implements 
-the algorithm of FairBatch as described in the paper.
-
-More detailed explanations of each component can be found in the code as comments.
-Thanks!
-
-### Demos using Google Colab
-We also release Google Colab notebooks for fast demos.
-You can access both the [PyTorch version](https://colab.research.google.com/drive/192tZmf-jXg1uesHW2TSqv0LoDbhAW4X1?usp=sharing) and the [TensorFlow version](https://colab.research.google.com/drive/1VBc7osg-wRKTKav32k1wY2yfKWK-wnDW?usp=sharing).
-
-### Reference
-```
-@inproceedings{
-roh2021fairbatch,
-title={FairBatch: Batch Selection for Model Fairness},
-author={Yuji Roh and Kangwook Lee and Steven Euijong Whang and Changho Suh},
-booktitle={International Conference on Learning Representations},
-year={2021},
-url={https://openreview.net/forum?id=YNnpaAKeCfx}
-}
-```
-

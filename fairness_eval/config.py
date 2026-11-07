@@ -22,14 +22,24 @@ SEEDS = range(10)
 TEST_SIZE = 0.3
 K_NEIGHBORS = 5  # consistency, as in Zemel et al. (2013)
 
-# training settings per dataset. Adult is 45k rows, so larger batches keep a run under a minute.
-# The authors use batch 100, alpha 0.005 and Adam with lr 0.0005 on 2000 synthetic rows.
+# Batch sizes and epochs of the paper's DP experiments (Sec. 4 and Table 2): 1,000 and 600 for Adult,
+# 200 and 300 for COMPAS. German is not in the paper; it has 700 training rows, so it gets small batches.
+# The paper uses Adam but gives no learning rate.
 TRAIN = {
-    "adult": dict(batch_size=500, epochs=100, lr=0.005, alpha=0.005),
-    "german": dict(batch_size=50, epochs=300, lr=0.005, alpha=0.005),
-    "compas": dict(batch_size=100, epochs=200, lr=0.005, alpha=0.005),
+    "adult": dict(batch_size=1000, epochs=600, lr=0.005),
+    "german": dict(batch_size=50, epochs=300, lr=0.005),
+    "compas": dict(batch_size=200, epochs=300, lr=0.005),
 }
 
-# step sizes for the trade off experiment, fewer seeds
+# alpha is chosen as in the paper (Sec. 4): candidates within [0.0001, 0.05], picked on the training data.
+# We hold out a stratified validation set of VAL_SIZE of the training data for seeds SEEDS_VAL, average
+# the validation metrics over these seeds, and take the alpha with the highest balanced accuracy among
+# those whose mean |DP_Diff| is at most DP_TOLERANCE (the smallest |DP_Diff| if none qualifies).
 ALPHAS = [0.0005, 0.001, 0.0025, 0.005, 0.01, 0.02]
-SEEDS_ALPHA = range(5)
+VAL_SIZE = 0.2
+SEEDS_VAL = range(5)
+DP_TOLERANCE = 0.05
+
+# FairBatch's DP results in the paper (Table 2, AdultCensus, sex as sensitive attribute):
+# accuracy and DP disparity as max_z |P(y_hat = 1 | z) - P(y_hat = 1)|
+PAPER_TABLE2_ADULT = {"baseline": (0.845, 0.125), "fairbatch": (0.823, 0.010)}
