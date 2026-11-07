@@ -19,6 +19,7 @@ The authors' files (`FairBatchSampler.py`, `models.py`, `FairBatch_Synthetic.ipy
 │   ├── main.csv              test set results, baseline and FairBatch, 10 seeds
 │   ├── lambdas.csv           FairBatch's two lambdas after every epoch, seed 0
 │   └── alpha.csv             FairBatch with six step sizes, 5 seeds
+├── docs/FairBatch.pdf        the original paper (Roh et al., ICLR 2021)
 ├── FairBatchSampler.py       the authors' sampler (unchanged)
 ├── models.py                 the authors' logistic regression (unchanged)
 └── FairBatch_Synthetic.ipynb the authors' demo on synthetic data (unchanged)
