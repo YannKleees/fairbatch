@@ -19,7 +19,7 @@ class FlatLogisticRegression(LogisticRegression):
 
 
 class FairBatchFixed(FairBatch):
-    """The authors' sampler with two fixes (see the README). Also records, once per epoch, the lambdas and the
+    """The authors' sampler with two fixes (fix 2 and fix 3 below). Also records, once per epoch, the lambdas and the
     demographic parity gap P(y_hat = 1 | z = 0) - P(y_hat = 1 | z = 1) of the model on the training data.
     Expects y in {-1, 1} and z in {0, 1}, both as float tensors."""
 
