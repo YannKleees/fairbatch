@@ -13,13 +13,14 @@ An evaluation of FairBatch (Roh et al., ICLR 2021) as a bias mitigation method f
 │   ├── sampler.py        the authors' sampler with three fixes, and a rate based variant
 │   └── experiments.py    training loop, alpha selection and experiments
 ├── results/              cached results, one CSV per experiment
+├── docs/Report.pdf       the report
 ├── docs/Paper.pdf        the FairBatch paper
 └── paper_code/           the authors' code from yuji-roh/fairbatch, with their README
 ```
 
 ## How to run
 
-You need Python 3.11 or newer and an internet connection, since the datasets are downloaded on first use.
+You need Python 3.12 or newer and an internet connection, since the datasets are downloaded on first use.
 
 ```
 git clone https://github.com/YannKleees/fairbatch.git
